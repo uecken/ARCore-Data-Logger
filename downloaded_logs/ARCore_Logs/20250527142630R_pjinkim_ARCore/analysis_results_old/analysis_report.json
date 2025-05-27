@@ -1,0 +1,69 @@
+{
+  "session_info": {
+    "session_name": "20250527142630R_pjinkim_ARCore",
+    "analysis_date": "2025-05-27T14:42:08.042600",
+    "total_samples": 1583,
+    "point_cloud_points": 5071
+  },
+  "temporal_analysis": {
+    "duration_seconds": 52.995086569,
+    "average_sampling_rate_hz": 29.870693728161424,
+    "first_timestamp": 472296326125637,
+    "last_timestamp": 472349321212206
+  },
+  "motion_analysis": {
+    "total_distance_m": 24.382498868078663,
+    "average_speed_ms": 0.4600384067546138,
+    "maximum_speed_ms": 1.258552812809561,
+    "speed_std_ms": 0.2817470200645658
+  },
+  "rotation_analysis": {
+    "roll_range_deg": 356.92351236489094,
+    "pitch_range_deg": 178.35840666137497,
+    "yaw_range_deg": 359.948749057874
+  },
+  "position_statistics": {
+    "mean_position": [
+      1.1567570208464926,
+      0.23032692293114324,
+      -1.9393587049905265
+    ],
+    "std_position": [
+      1.4292355857249386,
+      0.24468751593750254,
+      1.5769164062850847
+    ],
+    "position_range": [
+      4.861535,
+      1.175828,
+      5.414774
+    ],
+    "min_position": [
+      -1.474635,
+      -0.465606,
+      -4.608449
+    ],
+    "max_position": [
+      3.3869,
+      0.710222,
+      0.806325
+    ]
+  },
+  "point_cloud_statistics": {
+    "total_points": 5071,
+    "spatial_range": {
+      "x_range": [
+        -29.407053,
+        8.511129
+      ],
+      "y_range": [
+        -4.502082,
+        464.787659
+      ],
+      "z_range": [
+        -19.964979,
+        581.353943
+      ]
+    }
+  }
+}

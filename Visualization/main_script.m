@@ -90,7 +90,7 @@ figure;
 h_ARCore = plot3(stateEsti_ARCore(1,:),stateEsti_ARCore(2,:),stateEsti_ARCore(3,:),'m','LineWidth',2); hold on; grid on;
 scatter3(ARCorePoints(1,:), ARCorePoints(2,:), ARCorePoints(3,:), 50*ones(numPoints,1), (ARCoreColors ./ 255).','.');
 plot_inertial_frame(0.5); legend(h_ARCore,{'ARCore'}); axis equal; view(26, 73);
-xlabel('x [m]','fontsize',10); ylabel('y [m]','fontsize',10); zlabel('z [m]','fontsize',10); hold off;
+xlabel('X [m] - Right/Left','fontsize',10); ylabel('Y [m] - Up/Down (Gravity: -Y)','fontsize',10); zlabel('Z [m] - Camera Back/Front','fontsize',10); hold off;
 
 % figure options
 f = FigureRotator(gca());

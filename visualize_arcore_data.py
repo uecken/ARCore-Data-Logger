@@ -375,6 +375,78 @@ class ARCoreDataVisualizer:
         
         print("Visualization complete!")
 
+def visualize_trajectory_3d(timestamps, positions):
+    """Create 3D trajectory visualization with coordinate system info"""
+    fig = plt.figure(figsize=(15, 12))
+    
+    # 3D trajectory plot
+    ax1 = fig.add_subplot(221, projection='3d')
+    
+    # Color trajectory by time
+    colors = plt.cm.viridis(np.linspace(0, 1, len(positions)))
+    
+    for i in range(len(positions)-1):
+        ax1.plot([positions[i][0], positions[i+1][0]], 
+                [positions[i][1], positions[i+1][1]], 
+                [positions[i][2], positions[i+1][2]], 
+                color=colors[i], alpha=0.7, linewidth=2)
+    
+    # Mark start and end points
+    ax1.scatter(positions[0][0], positions[0][1], positions[0][2], 
+               color='green', s=100, label='Start', marker='o')
+    ax1.scatter(positions[-1][0], positions[-1][1], positions[-1][2], 
+               color='red', s=100, label='End', marker='s')
+    
+    ax1.set_xlabel('X (m) - Right/Left')
+    ax1.set_ylabel('Y (m) - Up/Down (Gravity: -Y)') 
+    ax1.set_zlabel('Z (m) - Camera Back/Front')
+    ax1.set_title('3D Device Trajectory\n(ARCore World Coordinate System)')
+    ax1.legend()
+    ax1.grid(True)
+    
+    # Add coordinate system info with correct ARCore definition
+    ax1.text2D(0.02, 0.98, 'ARCore World Coordinate System:\n• X: Right(+) / Left(-)\n• Y: Up(+) / Down(-) [Gravity: -Y]\n• Z: Camera Back(+) / Front(-)', 
+               transform=ax1.transAxes, fontsize=8, verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    
+    # 2D projections with corrected views
+    ax2 = fig.add_subplot(222)
+    ax2.plot([p[0] for p in positions], [p[1] for p in positions], 'b-', alpha=0.7, linewidth=2)
+    ax2.scatter(positions[0][0], positions[0][1], color='green', s=50, label='Start')
+    ax2.scatter(positions[-1][0], positions[-1][1], color='red', s=50, label='End')
+    ax2.set_xlabel('X (m) - Right/Left')
+    ax2.set_ylabel('Y (m) - Up/Down')
+    ax2.set_title('Front View (X-Y Plane)\n[Looking along Z-axis from camera direction]')
+    ax2.grid(True)
+    ax2.legend()
+    ax2.axis('equal')
+    
+    ax3 = fig.add_subplot(223)
+    ax3.plot([p[0] for p in positions], [-p[2] for p in positions], 'r-', alpha=0.7, linewidth=2)
+    ax3.scatter(positions[0][0], -positions[0][2], color='green', s=50, label='Start')
+    ax3.scatter(positions[-1][0], -positions[-1][2], color='red', s=50, label='End')
+    ax3.set_xlabel('X (m) - Right/Left')
+    ax3.set_ylabel('-Z (m) - Camera Front/Back')
+    ax3.set_title('Top-Down View (X-Z Plane)\n[Bird\'s Eye View - Looking down from above]')
+    ax3.grid(True)
+    ax3.legend()
+    ax3.axis('equal')
+    
+    ax4 = fig.add_subplot(224)
+    ax4.plot([p[1] for p in positions], [p[2] for p in positions], 'g-', alpha=0.7, linewidth=2)
+    ax4.scatter(positions[0][1], positions[0][2], color='green', s=50, label='Start')
+    ax4.scatter(positions[-1][1], positions[-1][2], color='red', s=50, label='End')
+    ax4.set_xlabel('Y (m) - Up/Down')
+    ax4.set_ylabel('Z (m) - Camera Back/Front')
+    ax4.set_title('Side View (Y-Z Plane)\n[Looking from right side, X-axis into page]')
+    ax4.grid(True)
+    ax4.legend()
+    ax4.axis('equal')
+    
+    plt.tight_layout()
+    plt.savefig('arcore_trajectory_3d.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
 def main():
     parser = argparse.ArgumentParser(description='Visualize ARCore Data Logger output')
     parser.add_argument('data_folder', nargs='?', 
@@ -401,6 +473,37 @@ def main():
     # Create visualizer and run
     visualizer = ARCoreDataVisualizer(data_path)
     visualizer.visualize_all()
+
+    # Visualize trajectory
+    print("Creating trajectory visualizations...")
+    visualize_trajectory_3d(visualizer.pose_data['timestamp'], visualizer.pose_data['position'])
+    
+    # Movement analysis
+    print("\n=== MOVEMENT ANALYSIS ===")
+    distances = []
+    speeds = []
+    for i in range(1, len(visualizer.pose_data['position'])):
+        dist = np.linalg.norm(np.array(visualizer.pose_data['position'][i]) - np.array(visualizer.pose_data['position'][i-1]))
+        time_diff = (visualizer.pose_data['timestamp'][i] - visualizer.pose_data['timestamp'][i-1]) / 1e9  # Convert to seconds
+        distances.append(dist)
+        if time_diff > 0:
+            speeds.append(dist / time_diff)
+    
+    print(f"Movement segments: {len(distances)}")
+    print(f"Average segment distance: {np.mean(distances):.4f} m")
+    print(f"Maximum segment distance: {np.max(distances):.4f} m")
+    print(f"Average speed: {np.mean(speeds):.3f} m/s")
+    print(f"Maximum speed: {np.max(speeds):.3f} m/s")
+    
+    # Check for potential tracking issues
+    large_jumps = [i for i, d in enumerate(distances) if d > 0.5]  # Jumps > 50cm
+    if large_jumps:
+        print(f"\nPotential tracking issues detected:")
+        print(f"Large position jumps (>0.5m): {len(large_jumps)} occurrences")
+        for jump_idx in large_jumps[:5]:  # Show first 5
+            print(f"  Jump {jump_idx}: {distances[jump_idx]:.3f}m at {visualizer.pose_data['timestamp'][jump_idx+1]/1e9:.2f}s")
+    else:
+        print("\nNo significant tracking issues detected (all movements <0.5m per frame)")
 
 if __name__ == "__main__":
     main() 

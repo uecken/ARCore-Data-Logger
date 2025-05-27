@@ -1,0 +1,43 @@
+============================================================
+ARCore Data Analysis Report
+============================================================
+
+SESSION INFORMATION:
+------------------------------
+Session Name: 20250527142630R_pjinkim_ARCore
+Analysis Date: 2025-05-27T14:58:48.588920
+Total Pose Samples: 1583
+Point Cloud Points: 5071
+
+TEMPORAL ANALYSIS:
+------------------------------
+Duration: 53.00 seconds
+Average Sampling Rate: 29.9 Hz
+
+MOTION ANALYSIS:
+------------------------------
+Total Distance: 24.382 m
+Average Speed: 0.460 m/s
+Maximum Speed: 1.259 m/s
+Speed Std Dev: 0.282 m/s
+
+ROTATION ANALYSIS:
+------------------------------
+Roll Range: 356.9 degrees
+Pitch Range: 178.4 degrees
+Yaw Range: 359.9 degrees
+
+POSITION STATISTICS:
+------------------------------
+Mean Position: [1.157, 0.230, -1.939] m
+Std Position: [1.429, 0.245, 1.577] m
+Position Range: [4.862, 1.176, 5.415] m
+Min Position: [-1.475, -0.466, -4.608] m
+Max Position: [3.387, 0.710, 0.806] m
+
+POINT CLOUD STATISTICS:
+------------------------------
+Total Points: 5071
+X Range: [-29.407, 8.511] m
+Y Range: [-4.502, 464.788] m
+Z Range: [-19.965, 581.354] m
