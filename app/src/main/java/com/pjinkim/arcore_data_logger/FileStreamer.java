@@ -52,7 +52,20 @@ public class FileStreamer {
     private BufferedWriter createFile(final String path, final String timeHeader) throws IOException {
 
         File file = new File(path);
+        Log.i(LOG_TAG, "createFile: Creating file at path: " + path);
+        Log.i(LOG_TAG, "createFile: File parent directory: " + file.getParent());
+        Log.i(LOG_TAG, "createFile: File exists before creation: " + file.exists());
+        
+        // Ensure parent directory exists
+        File parentDir = file.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            boolean dirCreated = parentDir.mkdirs();
+            Log.i(LOG_TAG, "createFile: Parent directory created: " + dirCreated);
+        }
+        
         BufferedWriter writer = new BufferedWriter((new FileWriter(file)));
+        Log.i(LOG_TAG, "createFile: File created successfully: " + file.exists());
+        Log.i(LOG_TAG, "createFile: File absolute path: " + file.getAbsolutePath());
 
         Intent scanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
         scanIntent.setData(Uri.fromFile(file));
@@ -60,6 +73,7 @@ public class FileStreamer {
         if ((timeHeader != null) && (timeHeader.length() != 0)) {
             writer.append(timeHeader);
             writer.flush();
+            Log.i(LOG_TAG, "createFile: Time header written and flushed");
         }
         return writer;
     }

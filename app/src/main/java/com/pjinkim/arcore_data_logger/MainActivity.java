@@ -18,9 +18,17 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.ar.core.ArCoreApk;
+import com.google.ar.core.Session;
 import com.google.ar.core.TrackingFailureReason;
 import com.google.ar.core.TrackingState;
+import com.google.ar.core.exceptions.UnavailableApkTooOldException;
+import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
+import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException;
+import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
+import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Timer;
@@ -35,13 +43,15 @@ public class MainActivity extends AppCompatActivity {
 
     private final static int REQUEST_CODE_ANDROID = 1001;
     private static String[] REQUIRED_PERMISSIONS = new String[] {
-            Manifest.permission.CAMERA,
-            Manifest.permission.WAKE_LOCK,
-            Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
+            Manifest.permission.CAMERA
+            // Removed WRITE_EXTERNAL_STORAGE (deprecated on Android 10+)
+            // Removed READ_PHONE_STATE (not essential for ARCore)
+            // WAKE_LOCK is not a dangerous permission, doesn't need runtime request
     };
 
     private ARCoreSession mARCoreSession;
+    private Session mSession;
+    private boolean mInstallRequested;
 
     private Handler mHandler = new Handler();
     private AtomicBoolean mIsRecording = new AtomicBoolean(false);
@@ -67,32 +77,128 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-
         // initialize screen labels and buttons
         initializeViews();
-
-
-        // setup sessions
-        mARCoreSession = new ARCoreSession(this);
-
 
         // battery power setting
         PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         mWakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "sensors_data_logger:wakelocktag");
         mWakeLock.acquire();
 
-
-        // monitor ARCore information
-        displayARCoreInformation();
+        // Initialize UI state
         mLabelInterfaceTime.setText(R.string.ready_title);
+        mStartStopButton.setEnabled(false);
+        mStartStopButton.setText("Checking ARCore...");
+        
+        // Initialize status labels
+        mLabelNumberFeatures.setText("N/A");
+        mLabelTrackingStatus.setText("INITIALIZING");
+        mLabelTrackingFailureReason.setText("N/A");
+        mLabelUpdateRate.setText("N/A");
     }
 
 
     @Override
     protected void onResume() {
         super.onResume();
+        
         if (!hasPermissions(this, REQUIRED_PERMISSIONS)) {
             requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_ANDROID);
+            return;
+        }
+
+        // Check ARCore availability and request installation if needed
+        if (mSession == null) {
+            Exception exception = null;
+            String message = null;
+            try {
+                // Check ARCore availability without forcing update
+                ArCoreApk.Availability availability = ArCoreApk.getInstance().checkAvailability(this);
+                if (availability.isTransient()) {
+                    // Re-query at 5Hz while compatibility is checked in the background.
+                    new Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            onResume();
+                        }
+                    }, 200);
+                    return;
+                }
+                
+                if (availability.isSupported()) {
+                    // ARCore is supported and available, try to create session directly
+                    try {
+                        mSession = new Session(/* context= */ this);
+                    } catch (UnavailableApkTooOldException e) {
+                        // Only request install/update if session creation fails due to old version
+                        switch (ArCoreApk.getInstance().requestInstall(this, !mInstallRequested)) {
+                            case INSTALL_REQUESTED:
+                                mInstallRequested = true;
+                                return;
+                            case INSTALLED:
+                                mSession = new Session(/* context= */ this);
+                                break;
+                        }
+                    } catch (UnavailableArcoreNotInstalledException e) {
+                        // ARCore not installed, request installation
+                        switch (ArCoreApk.getInstance().requestInstall(this, !mInstallRequested)) {
+                            case INSTALL_REQUESTED:
+                                mInstallRequested = true;
+                                return;
+                            case INSTALLED:
+                                mSession = new Session(/* context= */ this);
+                                break;
+                        }
+                    }
+                } else {
+                    // ARCore not supported on this device
+                    message = "This device does not support AR";
+                    exception = new UnavailableDeviceNotCompatibleException();
+                }
+
+            } catch (UnavailableArcoreNotInstalledException
+                    | UnavailableUserDeclinedInstallationException e) {
+                message = "Please install ARCore from Google Play Store";
+                exception = e;
+            } catch (UnavailableApkTooOldException e) {
+                message = "Please update ARCore from Google Play Store";
+                exception = e;
+            } catch (UnavailableSdkTooOldException e) {
+                message = "Please update this app";
+                exception = e;
+            } catch (UnavailableDeviceNotCompatibleException e) {
+                message = "This device does not support AR";
+                exception = e;
+            } catch (Exception e) {
+                message = "Failed to create AR session: " + e.getMessage();
+                exception = e;
+            }
+
+            if (message != null) {
+                showToast(message);
+                Log.e(LOG_TAG, "Exception creating session", exception);
+                // Don't return here - allow the app to continue without ARCore
+                // but disable recording functionality
+                updateUIForNoARCore();
+                return;
+            }
+        }
+
+        // Initialize ARCore session only after successful setup
+        if (mARCoreSession == null && mSession != null) {
+            try {
+                mARCoreSession = new ARCoreSession(this);
+                // Initialize ArFragment after ARCore session is confirmed working
+                mARCoreSession.initializeArFragment();
+                // monitor ARCore information
+                displayARCoreInformation();
+                // Enable recording button
+                enableRecordingButton();
+            } catch (Exception e) {
+                Log.e(LOG_TAG, "Failed to initialize ARCore session", e);
+                showToast("Failed to initialize ARCore session");
+                updateUIForNoARCore();
+            }
         }
     }
 
@@ -101,6 +207,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         if (mIsRecording.get()) {
             stopRecording();
+        }
+        if (mSession != null) {
+            mSession.close();
+            mSession = null;
         }
         if (mWakeLock.isHeld()) {
             mWakeLock.release();
@@ -111,6 +221,12 @@ public class MainActivity extends AppCompatActivity {
 
     // methods
     public void startStopRecording(View view) {
+        // Check if ARCore session is available before allowing recording
+        if (mARCoreSession == null) {
+            showToast("ARCore is not available. Please install ARCore and restart the app.");
+            return;
+        }
+        
         if (!mIsRecording.get()) {
 
             // start recording sensor measurements when button is pressed
@@ -122,7 +238,12 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void run() {
                     mSecondCounter += 1;
-                    mLabelInterfaceTime.setText(interfaceIntTime(mSecondCounter));
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mLabelInterfaceTime.setText(interfaceIntTime(mSecondCounter));
+                        }
+                    });
                 }
             }, 0, 1000);
 
@@ -133,26 +254,44 @@ public class MainActivity extends AppCompatActivity {
 
             // stop interface timer on display
             mInterfaceTimer.cancel();
-            mLabelInterfaceTime.setText(R.string.ready_title);
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mLabelInterfaceTime.setText(R.string.ready_title);
+                }
+            });
         }
     }
 
 
     private void startRecording() {
 
+        // Check if ARCore session is available
+        if (mARCoreSession == null) {
+            Log.e(LOG_TAG, "startRecording: ARCore session is not available");
+            showToast("ARCore session is not available");
+            return;
+        }
+
         // output directory for text files
         String outputFolder = null;
         try {
-            OutputDirectoryManager folder = new OutputDirectoryManager("", "R_pjinkim_ARCore");
+            Log.i(LOG_TAG, "startRecording: Creating output directory manager");
+            OutputDirectoryManager folder = new OutputDirectoryManager(this, "", "R_pjinkim_ARCore");
             outputFolder = folder.getOutputDirectory();
+            Log.i(LOG_TAG, "startRecording: Output folder created: " + outputFolder);
         } catch (IOException e) {
-            Log.e(LOG_TAG, "startRecording: Cannot create output folder.");
+            Log.e(LOG_TAG, "startRecording: Cannot create output folder.", e);
+            showToast("Cannot create output folder");
             e.printStackTrace();
+            return;
         }
 
         // start ARCore session
+        Log.i(LOG_TAG, "startRecording: Starting ARCore session with folder: " + outputFolder);
         mARCoreSession.startSession(outputFolder);
         mIsRecording.set(true);
+        Log.i(LOG_TAG, "startRecording: Recording state set to true");
 
         // update Start/Stop button UI
         runOnUiThread(new Runnable() {
@@ -171,17 +310,89 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
 
-                // stop ARCore session
-                mARCoreSession.stopSession();
+                // stop ARCore session only if it exists
+                if (mARCoreSession != null) {
+                    mARCoreSession.stopSession();
+                }
                 mIsRecording.set(false);
 
+                // Copy files to external storage for easy access
+                copyFilesToExternalStorage();
+
                 // update screen UI and button
-                showToast("Recording stops!");
+                showToast("Recording stops! Files saved to Downloads folder.");
                 resetUI();
             }
         });
     }
 
+    private void copyFilesToExternalStorage() {
+        try {
+            // Get the most recent recording folder
+            File internalDir = getFilesDir();
+            File[] folders = internalDir.listFiles();
+            if (folders == null || folders.length == 0) {
+                Log.w(LOG_TAG, "No recording folders found");
+                return;
+            }
+
+            // Find the most recent folder
+            File mostRecentFolder = null;
+            long lastModified = 0;
+            for (File folder : folders) {
+                if (folder.isDirectory() && folder.lastModified() > lastModified) {
+                    lastModified = folder.lastModified();
+                    mostRecentFolder = folder;
+                }
+            }
+
+            if (mostRecentFolder == null) {
+                Log.w(LOG_TAG, "No recent folder found");
+                return;
+            }
+
+            // Create destination folder in Downloads
+            File downloadsDir = new File(getExternalFilesDir(null), "ARCore_Logs");
+            if (!downloadsDir.exists()) {
+                downloadsDir.mkdirs();
+            }
+
+            File destFolder = new File(downloadsDir, mostRecentFolder.getName());
+            if (!destFolder.exists()) {
+                destFolder.mkdirs();
+            }
+
+            // Copy files
+            File[] files = mostRecentFolder.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isFile()) {
+                        copyFile(file, new File(destFolder, file.getName()));
+                        Log.i(LOG_TAG, "Copied file: " + file.getName() + " to " + destFolder.getAbsolutePath());
+                    }
+                }
+            }
+
+            Log.i(LOG_TAG, "Files copied to: " + destFolder.getAbsolutePath());
+            
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "Error copying files to external storage", e);
+        }
+    }
+
+    private void copyFile(File source, File dest) throws IOException {
+        java.io.FileInputStream fis = new java.io.FileInputStream(source);
+        java.io.FileOutputStream fos = new java.io.FileOutputStream(dest);
+        
+        byte[] buffer = new byte[1024];
+        int length;
+        while ((length = fis.read(buffer)) > 0) {
+            fos.write(buffer, 0, length);
+        }
+        
+        fis.close();
+        fos.close();
+    }
 
     public void showToast(final String text) {
         runOnUiThread(new Runnable() {
@@ -241,6 +452,29 @@ public class MainActivity extends AppCompatActivity {
         // nullify back button when recording starts
         if (!mIsRecording.get()) {
             super.onBackPressed();
+        }
+    }
+
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        
+        if (requestCode == REQUEST_CODE_ANDROID) {
+            if (hasPermissions(this, REQUIRED_PERMISSIONS)) {
+                // Permissions granted, resume ARCore initialization
+                Log.d(LOG_TAG, "Permissions granted, resuming ARCore initialization");
+                // Call onResume logic again to continue with ARCore setup
+                if (mSession == null) {
+                    // Restart the ARCore initialization process
+                    onResume();
+                }
+            } else {
+                // Permissions denied
+                showToast("Camera permission is required for ARCore functionality");
+                Log.e(LOG_TAG, "Required permissions not granted");
+                finish();
+            }
         }
     }
 
@@ -346,5 +580,31 @@ public class MainActivity extends AppCompatActivity {
                 displayARCoreInformation();
             }
         }, displayInterval);
+    }
+
+    private void updateUIForNoARCore() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mLabelNumberFeatures.setText("N/A");
+                mLabelTrackingStatus.setText("NO ARCORE");
+                mLabelTrackingFailureReason.setText("NOT INSTALLED");
+                mLabelUpdateRate.setText("N/A");
+                
+                // Disable the start/stop button
+                mStartStopButton.setEnabled(false);
+                mStartStopButton.setText("ARCore Required");
+            }
+        });
+    }
+
+    private void enableRecordingButton() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mStartStopButton.setEnabled(true);
+                mStartStopButton.setText(R.string.start_title);
+            }
+        });
     }
 }

@@ -61,17 +61,37 @@ public class ARCoreSession {
     // constructor
     public ARCoreSession(@NonNull MainActivity context) {
 
-        // initialize object and ARCore fragment
+        // initialize object
         mContext = context;
-        mArFragment = (ArFragment) mContext.getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
-        mArFragment.getArSceneView().getPlaneRenderer().setVisible(false);
-        mArFragment.getArSceneView().getScene().addOnUpdateListener(this::onUpdateFrame);
-
-        // render 3D point cloud on the screen
-        mPointCloudNode = new PointCloudNode(mContext);
-        mArFragment.getArSceneView().getScene().addChild(mPointCloudNode);
         mAccumulatedPointCloud = new AccumulatedPointCloud();
         mWorldToScreenTranslator = new WorldToScreenTranslator();
+        
+        // ArFragment will be initialized later after ARCore session is confirmed
+    }
+
+    // Initialize ArFragment after ARCore session is confirmed working
+    public void initializeArFragment() {
+        if (mArFragment == null) {
+            // Create ArFragment dynamically
+            mArFragment = new ArFragment();
+            
+            // Add the fragment to the container
+            mContext.getSupportFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.ux_fragment, mArFragment)
+                    .commit();
+            
+            // Wait for fragment to be ready, then configure it
+            mContext.getSupportFragmentManager().executePendingTransactions();
+            
+            // Configure the ArFragment
+            mArFragment.getArSceneView().getPlaneRenderer().setVisible(false);
+            mArFragment.getArSceneView().getScene().addOnUpdateListener(this::onUpdateFrame);
+
+            // render 3D point cloud on the screen
+            mPointCloudNode = new PointCloudNode(mContext);
+            mArFragment.getArSceneView().getScene().addChild(mPointCloudNode);
+        }
     }
 
 
@@ -81,14 +101,20 @@ public class ARCoreSession {
         // initialize text file stream
         if (streamFolder != null) {
             try {
+                Log.i(LOG_TAG, "startSession: Initializing file streamer with folder: " + streamFolder);
                 mFileStreamer = new ARCoreResultStreamer(mContext, streamFolder);
                 mIsWritingFile.set(true);
+                Log.i(LOG_TAG, "startSession: File streamer initialized successfully");
             } catch (IOException e) {
+                Log.e(LOG_TAG, "startSession: Cannot create file for ARCore tracking results.", e);
                 mContext.showToast("Cannot create file for ARCore tracking results.");
                 e.printStackTrace();
             }
+        } else {
+            Log.w(LOG_TAG, "startSession: streamFolder is null, no files will be created");
         }
         mIsRecording.set(true);
+        Log.i(LOG_TAG, "startSession: Recording started");
     }
 
 
@@ -129,12 +155,23 @@ public class ARCoreSession {
 
     private void onUpdateFrame(FrameTime frameTime) {
 
+        // Check if ArFragment is initialized
+        if (mArFragment == null) {
+            return;
+        }
+
         // set some variables
         boolean isFileSaved = (mIsRecording.get() && mIsWritingFile.get());
 
         // obtain current ARCore information
         mArFragment.onUpdate(frameTime);
         Frame frame = mArFragment.getArSceneView().getArFrame();
+        
+        // Check if frame is available
+        if (frame == null) {
+            return;
+        }
+        
         Camera camera = frame.getCamera();
 
         // update ARCore measurements

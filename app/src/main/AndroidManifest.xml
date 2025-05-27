@@ -14,13 +14,16 @@
    limitations under the License.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.pjinkim.arcore_data_logger">
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Query declaration for ARCore package visibility (Android 11+) -->
+    <queries>
+        <package android:name="com.google.ar.core" />
+    </queries>
 
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.ar" android:required="true"/>
 
     <application
