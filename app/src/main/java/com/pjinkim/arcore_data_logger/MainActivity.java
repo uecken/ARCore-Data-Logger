@@ -284,13 +284,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void startRecording() {
 
-        // Check if ARCore session is available
-        if (mARCoreSession == null) {
-            Log.e(LOG_TAG, "startRecording: ARCore session is not available");
-            showToast("ARCore session is not available");
-            return;
-        }
-
         // output directory for text files
         String outputFolder = null;
         try {
@@ -305,11 +298,55 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // start ARCore session
-        Log.i(LOG_TAG, "startRecording: Starting ARCore session with folder: " + outputFolder);
+        // COMPLETE VIO RESET: Destroy and recreate ARCore session for clean start
+        try {
+            Log.i(LOG_TAG, "startRecording: Starting complete VIO reset...");
+            
+            // Step 1: Clean up existing ARCore session
+            if (mARCoreSession != null) {
+                Log.i(LOG_TAG, "startRecording: Cleaning up existing ARCore session");
+                mARCoreSession.cleanupSession();
+                mARCoreSession = null;
+            }
+            
+            // Step 2: Reset ARCore Session at native level
+            if (mSession != null) {
+                Log.i(LOG_TAG, "startRecording: Closing native ARCore session");
+                mSession.close();
+                mSession = null;
+            }
+            
+            // Step 3: Brief pause to ensure complete cleanup
+            Thread.sleep(100);
+            
+            // Step 4: Create fresh ARCore session
+            Log.i(LOG_TAG, "startRecording: Creating fresh ARCore session");
+            mSession = new com.google.ar.core.Session(this);
+            
+            // Step 5: Create new ARCoreSession wrapper
+            Log.i(LOG_TAG, "startRecording: Creating new ARCoreSession wrapper");
+            mARCoreSession = new ARCoreSession(this);
+            
+            // Step 6: Initialize ArFragment with clean state
+            Log.i(LOG_TAG, "startRecording: Initializing fresh ArFragment");
+            mARCoreSession.initializeArFragment();
+            
+            // Step 7: Brief stabilization period
+            Thread.sleep(200);
+            
+            Log.i(LOG_TAG, "startRecording: VIO reset completed successfully");
+            
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "startRecording: Failed to reset VIO sensors", e);
+            showToast("Failed to reset VIO sensors: " + e.getMessage());
+            return;
+        }
+
+        // Start fresh session with clean VIO state
+        Log.i(LOG_TAG, "startRecording: Starting fresh ARCore session with folder: " + outputFolder);
         mARCoreSession.startSession(outputFolder);
         mIsRecording.set(true);
-        Log.i(LOG_TAG, "startRecording: Recording state set to true");
+        Log.i(LOG_TAG, "startRecording: Recording state set to true with clean VIO");
 
         // update Start/Stop button UI
         runOnUiThread(new Runnable() {
@@ -320,7 +357,7 @@ public class MainActivity extends AppCompatActivity {
                 mDetectTagButton.setEnabled(true);
             }
         });
-        showToast("Recording starts!");
+        showToast("Recording starts with fresh VIO!");
     }
 
 
