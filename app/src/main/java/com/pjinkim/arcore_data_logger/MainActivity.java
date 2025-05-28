@@ -61,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView mLabelTrackingStatus, mLabelTrackingFailureReason;
 
     private Button mStartStopButton;
+    private Button mDetectTagButton;
     private TextView mLabelInterfaceTime;
     private Timer mInterfaceTimer = new Timer();
     private int mSecondCounter = 0;
@@ -263,6 +264,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public void detectRFIDTag(View view) {
+        // Check if recording is active
+        if (!mIsRecording.get()) {
+            showToast("Please start recording first");
+            return;
+        }
+        
+        // Check if ARCore session is available
+        if (mARCoreSession == null) {
+            showToast("ARCore session is not available");
+            return;
+        }
+        
+        // Trigger RFID tag detection
+        mARCoreSession.detectRFIDTag("TAG001");
+        showToast("RFID Tag detected!");
+    }
 
     private void startRecording() {
 
@@ -299,6 +317,7 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 mStartStopButton.setEnabled(true);
                 mStartStopButton.setText(R.string.stop_title);
+                mDetectTagButton.setEnabled(true);
             }
         });
         showToast("Recording starts!");
@@ -415,6 +434,7 @@ public class MainActivity extends AppCompatActivity {
 
                 mStartStopButton.setEnabled(true);
                 mStartStopButton.setText(R.string.start_title);
+                mDetectTagButton.setEnabled(false);
             }
         });
     }
@@ -519,6 +539,7 @@ public class MainActivity extends AppCompatActivity {
         mLabelUpdateRate = (TextView) findViewById(R.id.label_update_rate);
 
         mStartStopButton = (Button) findViewById(R.id.button_start_stop);
+        mDetectTagButton = (Button) findViewById(R.id.button_detect_tag);
         mLabelInterfaceTime = (TextView) findViewById(R.id.label_interface_time);
     }
 
@@ -594,6 +615,7 @@ public class MainActivity extends AppCompatActivity {
                 // Disable the start/stop button
                 mStartStopButton.setEnabled(false);
                 mStartStopButton.setText("ARCore Required");
+                mDetectTagButton.setEnabled(false);
             }
         });
     }
@@ -604,6 +626,7 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 mStartStopButton.setEnabled(true);
                 mStartStopButton.setText(R.string.start_title);
+                mDetectTagButton.setEnabled(true);
             }
         });
     }

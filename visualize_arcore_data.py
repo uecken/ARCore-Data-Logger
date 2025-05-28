@@ -35,12 +35,36 @@ class ARCoreDataVisualizer:
             return False
             
         try:
-            # Skip header line and load data
-            data = np.loadtxt(pose_file, skiprows=1)
+            # Read all lines manually to handle variable column counts
+            with open(pose_file, 'r') as f:
+                lines = f.readlines()
             
-            if data.size == 0:
+            # Skip header line
+            data_lines = [line.strip() for line in lines[1:] if line.strip()]
+            
+            if not data_lines:
                 print("Warning: No pose data found!")
                 return False
+            
+            # Parse data - handle both formats (with and without tag ID)
+            pose_data = []
+            
+            for line in data_lines:
+                parts = line.split()
+                if len(parts) >= 8:  # timestamp + 7 pose values (minimum required)
+                    timestamp = float(parts[0])
+                    qx, qy, qz, qw = map(float, parts[1:5])
+                    tx, ty, tz = map(float, parts[5:8])
+                    
+                    pose_data.append([timestamp, qx, qy, qz, qw, tx, ty, tz])
+                    # Note: We ignore tag ID (parts[8] if present) for trajectory visualization
+            
+            if not pose_data:
+                print("Warning: No valid pose data found!")
+                return False
+            
+            # Convert to numpy array
+            data = np.array(pose_data)
             
             # Filter out invalid data (NaN, inf, extremely large values)
             # Check for NaN values
@@ -474,36 +498,42 @@ def main():
     visualizer = ARCoreDataVisualizer(data_path)
     visualizer.visualize_all()
 
-    # Visualize trajectory
-    print("Creating trajectory visualizations...")
-    visualize_trajectory_3d(visualizer.pose_data['timestamp'], visualizer.pose_data['position'])
-    
-    # Movement analysis
-    print("\n=== MOVEMENT ANALYSIS ===")
-    distances = []
-    speeds = []
-    for i in range(1, len(visualizer.pose_data['position'])):
-        dist = np.linalg.norm(np.array(visualizer.pose_data['position'][i]) - np.array(visualizer.pose_data['position'][i-1]))
-        time_diff = (visualizer.pose_data['timestamp'][i] - visualizer.pose_data['timestamp'][i-1]) / 1e9  # Convert to seconds
-        distances.append(dist)
-        if time_diff > 0:
-            speeds.append(dist / time_diff)
-    
-    print(f"Movement segments: {len(distances)}")
-    print(f"Average segment distance: {np.mean(distances):.4f} m")
-    print(f"Maximum segment distance: {np.max(distances):.4f} m")
-    print(f"Average speed: {np.mean(speeds):.3f} m/s")
-    print(f"Maximum speed: {np.max(speeds):.3f} m/s")
-    
-    # Check for potential tracking issues
-    large_jumps = [i for i, d in enumerate(distances) if d > 0.5]  # Jumps > 50cm
-    if large_jumps:
-        print(f"\nPotential tracking issues detected:")
-        print(f"Large position jumps (>0.5m): {len(large_jumps)} occurrences")
-        for jump_idx in large_jumps[:5]:  # Show first 5
-            print(f"  Jump {jump_idx}: {distances[jump_idx]:.3f}m at {visualizer.pose_data['timestamp'][jump_idx+1]/1e9:.2f}s")
+    # Only proceed with trajectory visualization if pose data was loaded successfully
+    if visualizer.pose_data is not None:
+        # Visualize trajectory
+        print("Creating trajectory visualizations...")
+        visualize_trajectory_3d(visualizer.pose_data['timestamp'], visualizer.pose_data['position'])
+        
+        # Movement analysis
+        print("\n=== MOVEMENT ANALYSIS ===")
+        distances = []
+        speeds = []
+        for i in range(1, len(visualizer.pose_data['position'])):
+            dist = np.linalg.norm(np.array(visualizer.pose_data['position'][i]) - np.array(visualizer.pose_data['position'][i-1]))
+            time_diff = (visualizer.pose_data['timestamp'][i] - visualizer.pose_data['timestamp'][i-1]) / 1e9  # Convert to seconds
+            distances.append(dist)
+            if time_diff > 0:
+                speeds.append(dist / time_diff)
+        
+        print(f"Movement segments: {len(distances)}")
+        print(f"Average segment distance: {np.mean(distances):.4f} m")
+        print(f"Maximum segment distance: {np.max(distances):.4f} m")
+        print(f"Average speed: {np.mean(speeds):.3f} m/s")
+        print(f"Maximum speed: {np.max(speeds):.3f} m/s")
+        
+        # Check for potential tracking issues
+        large_jumps = [i for i, d in enumerate(distances) if d > 0.5]  # Jumps > 50cm
+        if large_jumps:
+            print(f"\nPotential tracking issues detected:")
+            print(f"Large position jumps (>0.5m): {len(large_jumps)} occurrences")
+            for jump_idx in large_jumps[:5]:  # Show first 5
+                print(f"  Jump {jump_idx}: {distances[jump_idx]:.3f}m at {visualizer.pose_data['timestamp'][jump_idx+1]/1e9:.2f}s")
+        else:
+            print("\nNo significant tracking issues detected (all movements <0.5m per frame)")
     else:
-        print("\nNo significant tracking issues detected (all movements <0.5m per frame)")
+        print("Skipping trajectory analysis due to pose data loading failure.")
+        print("Note: This may be due to RFID tag data in the pose file.")
+        print("The pose data contains tag information which is handled by the RFID localization script.")
 
 if __name__ == "__main__":
     main() 

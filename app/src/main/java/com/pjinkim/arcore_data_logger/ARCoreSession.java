@@ -117,6 +117,45 @@ public class ARCoreSession {
         Log.i(LOG_TAG, "startSession: Recording started");
     }
 
+    public void detectRFIDTag(String tagId) {
+        if (!mIsRecording.get() || !mIsWritingFile.get()) {
+            Log.w(LOG_TAG, "detectRFIDTag: Not recording, ignoring tag detection");
+            return;
+        }
+
+        if (mArFragment == null) {
+            Log.w(LOG_TAG, "detectRFIDTag: ArFragment not initialized");
+            return;
+        }
+
+        try {
+            Frame frame = mArFragment.getArSceneView().getArFrame();
+            if (frame == null) {
+                Log.w(LOG_TAG, "detectRFIDTag: No current frame available");
+                return;
+            }
+
+            // Get current pose data
+            long timestamp = frame.getTimestamp();
+            Pose T_gc = frame.getAndroidSensorPose();
+
+            float qx = T_gc.qx();
+            float qy = T_gc.qy();
+            float qz = T_gc.qz();
+            float qw = T_gc.qw();
+
+            float tx = T_gc.tx();
+            float ty = T_gc.ty();
+            float tz = T_gc.tz();
+
+            // Record pose with tag ID
+            mFileStreamer.addARCorePoseWithTagRecord(timestamp, qx, qy, qz, qw, tx, ty, tz, tagId);
+            Log.i(LOG_TAG, "detectRFIDTag: Recorded tag " + tagId + " at pose (" + tx + ", " + ty + ", " + tz + ")");
+
+        } catch (IOException | KeyException e) {
+            Log.e(LOG_TAG, "detectRFIDTag: Error recording tag detection", e);
+        }
+    }
 
     public void stopSession() {
 
@@ -333,6 +372,20 @@ public class ARCoreSession {
             }
         }
 
+        public void addARCorePoseWithTagRecord(long timestamp, float qx, float qy, float qz, float qw, float tx, float ty, float tz, String tagId) throws IOException, KeyException {
+
+            // execute the block with only one thread
+            synchronized (this) {
+
+                // record timestamp, 6-DoF device pose, and tag ID in text file
+                StringBuilder stringBuilder = new StringBuilder();
+                stringBuilder.append(timestamp);
+                stringBuilder.append(String.format(Locale.US, " %.6f %.6f %.6f %.6f %.6f %.6f %.6f", qx, qy, qz, qw, tx, ty, tz));
+                stringBuilder.append(" " + tagId);
+                stringBuilder.append(" \n");
+                mWriterPose.write(stringBuilder.toString());
+            }
+        }
 
         public void addARCorePointRecord(final float pointX, final float pointY, final float pointZ, final float r, final float g, final float b) throws IOException, KeyException {
 

@@ -173,6 +173,25 @@
         android:textAlignment="center"
         android:textColor="#3D5AFE"
         android:textSize="24sp"
+        app:layout_constraintBottom_toTopOf="@+id/button_detect_tag"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <Button
+        android:id="@+id/button_detect_tag"
+        android:layout_width="300dp"
+        android:layout_height="45dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="10dp"
+        android:background="#FFEB3B"
+        android:fontFamily="@font/roboto_black"
+        android:onClick="detectRFIDTag"
+        android:text="Detect RFID Tag"
+        android:textAlignment="center"
+        android:textColor="#FF5722"
+        android:textSize="20sp"
+        android:enabled="false"
         app:layout_constraintBottom_toTopOf="@+id/label_interface_time"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
