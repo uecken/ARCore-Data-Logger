@@ -32,7 +32,6 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.security.KeyException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -57,6 +56,7 @@ public class ARCoreSession {
     private TrackingState mTrackingState;
     private TrackingFailureReason mTrackingFailureReason;
     private double mUpdateRate = 0;
+
 
     // constructor
     public ARCoreSession(@NonNull MainActivity context) {
@@ -114,97 +114,9 @@ public class ARCoreSession {
             Log.w(LOG_TAG, "startSession: streamFolder is null, no files will be created");
         }
         mIsRecording.set(true);
-        Log.i(LOG_TAG, "startSession: Recording started with fresh VIO state");
+        Log.i(LOG_TAG, "startSession: Recording started");
     }
 
-    public void cleanupSession() {
-        Log.i(LOG_TAG, "cleanupSession: Starting cleanup process");
-        
-        // Stop recording if active
-        if (mIsRecording.get()) {
-            mIsRecording.set(false);
-        }
-        
-        // Close file streamer
-        if (mIsWritingFile.get() && mFileStreamer != null) {
-            try {
-                mFileStreamer.endFiles();
-            } catch (IOException e) {
-                Log.e(LOG_TAG, "cleanupSession: Error closing file streamer", e);
-            }
-            mIsWritingFile.set(false);
-        }
-        
-        // Reset accumulated point cloud
-        if (mAccumulatedPointCloud != null) {
-            mAccumulatedPointCloud = new AccumulatedPointCloud();
-        }
-        
-        // Reset tracking state variables
-        mNumberOfFeatures = 0;
-        mTrackingState = null;
-        mTrackingFailureReason = null;
-        mUpdateRate = 0;
-        previousTimestamp = 0;
-        
-        // Remove ArFragment from activity
-        if (mArFragment != null && mContext != null) {
-            try {
-                mContext.getSupportFragmentManager()
-                        .beginTransaction()
-                        .remove(mArFragment)
-                        .commit();
-                mContext.getSupportFragmentManager().executePendingTransactions();
-            } catch (Exception e) {
-                Log.w(LOG_TAG, "cleanupSession: Error removing ArFragment", e);
-            }
-            mArFragment = null;
-        }
-        
-        // Reset point cloud node
-        mPointCloudNode = null;
-        
-        Log.i(LOG_TAG, "cleanupSession: Cleanup completed");
-    }
-
-    public void detectRFIDTag(String tagId) {
-        if (!mIsRecording.get() || !mIsWritingFile.get()) {
-            Log.w(LOG_TAG, "detectRFIDTag: Not recording, ignoring tag detection");
-            return;
-        }
-
-        if (mArFragment == null) {
-            Log.w(LOG_TAG, "detectRFIDTag: ArFragment not initialized");
-            return;
-        }
-
-        try {
-            Frame frame = mArFragment.getArSceneView().getArFrame();
-            if (frame == null) {
-                Log.w(LOG_TAG, "detectRFIDTag: No current frame available");
-                return;
-            }
-
-            // Get current pose data
-            long timestamp = frame.getTimestamp();
-            Camera camera = frame.getCamera();
-            Pose cameraPose = camera.getPose();
-            
-            // Extract quaternion and translation from camera pose
-            float[] quaternion = cameraPose.getRotationQuaternion();
-            float[] translation = cameraPose.getTranslation();
-
-            // Record pose with tag ID using absolute coordinates (clean VIO)
-            mFileStreamer.addARCorePoseWithTagRecord(timestamp, 
-                quaternion[0], quaternion[1], quaternion[2], quaternion[3],
-                translation[0], translation[1], translation[2], tagId);
-            Log.i(LOG_TAG, "detectRFIDTag: Recorded tag " + tagId + " at absolute pose (" + 
-                  translation[0] + ", " + translation[1] + ", " + translation[2] + ")");
-
-        } catch (IOException | KeyException e) {
-            Log.e(LOG_TAG, "detectRFIDTag: Error recording tag detection", e);
-        }
-    }
 
     public void stopSession() {
 
@@ -240,6 +152,66 @@ public class ARCoreSession {
         mIsRecording.set(false);
     }
 
+    /**
+     * Clean up ARCore session resources
+     * This method is called when resetting the VIO system for a fresh start
+     */
+    public void cleanupSession() {
+        Log.i(LOG_TAG, "cleanupSession: Cleaning up ARCore session resources");
+        
+        try {
+            // Stop any ongoing recording
+            if (mIsRecording.get()) {
+                stopSession();
+            }
+            
+            // Clean up file streamer
+            if (mFileStreamer != null && mIsWritingFile.get()) {
+                try {
+                    mFileStreamer.endFiles();
+                } catch (IOException e) {
+                    Log.w(LOG_TAG, "cleanupSession: Error closing file streamer", e);
+                }
+                mFileStreamer = null;
+            }
+            
+            // Reset state variables
+            mIsRecording.set(false);
+            mIsWritingFile.set(false);
+            mNumberOfFeatures = 0;
+            mTrackingState = null;
+            mTrackingFailureReason = null;
+            mUpdateRate = 0;
+            previousTimestamp = 0;
+            
+            // Clear accumulated point cloud
+            if (mAccumulatedPointCloud != null) {
+                mAccumulatedPointCloud = new AccumulatedPointCloud();
+            }
+            
+            // Remove ArFragment from UI if it exists
+            if (mArFragment != null && mContext != null) {
+                try {
+                    mContext.getSupportFragmentManager()
+                            .beginTransaction()
+                            .remove(mArFragment)
+                            .commitAllowingStateLoss();
+                    mArFragment = null;
+                } catch (Exception e) {
+                    Log.w(LOG_TAG, "cleanupSession: Error removing ArFragment", e);
+                    mArFragment = null;
+                }
+            }
+            
+            // Clear point cloud node
+            mPointCloudNode = null;
+            
+            Log.i(LOG_TAG, "cleanupSession: Cleanup completed successfully");
+            
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "cleanupSession: Error during cleanup", e);
+        }
+    }
 
     private void onUpdateFrame(FrameTime frameTime) {
 
@@ -297,16 +269,7 @@ public class ARCoreSession {
             if (isFileSaved) {
 
                 // 1) record ARCore 6-DoF sensor pose
-                Pose cameraPose = camera.getPose();
-                
-                // Extract quaternion and translation from camera pose
-                float[] quaternion = cameraPose.getRotationQuaternion();
-                float[] translation = cameraPose.getTranslation();
-                
-                // Record absolute pose (clean VIO from session start)
-                mFileStreamer.addARCorePoseRecord(timestamp, 
-                    quaternion[0], quaternion[1], quaternion[2], quaternion[3],
-                    translation[0], translation[1], translation[2]);
+                mFileStreamer.addARCorePoseRecord(timestamp, qx, qy, qz, qw, tx, ty, tz);
 
                 // 2) record ARCore 3D point cloud only for visualization
                 Image imageFrame = frame.acquireCameraImage();
@@ -326,14 +289,14 @@ public class ARCoreSession {
                     float pointY = bufferPoint3D.get(i * 4 + 1);
                     float pointZ = bufferPoint3D.get(i * 4 + 2);
 
-                    // get RGB color information
+                    // get each point RGB color information
                     float[] worldPosition = new float[]{pointX, pointY, pointZ};
                     Vector3 pointColor = getScreenPixel(worldPosition, imageBitmap);
                     if (pointColor == null) {
                         continue;
                     }
-                    
-                    // append point position and color information (absolute coordinates)
+
+                    // append each point position and color information
                     mAccumulatedPointCloud.appendPointCloud(pointID, pointX, pointY, pointZ, pointColor.x, pointColor.y, pointColor.z);
                 }
             }
@@ -397,6 +360,76 @@ public class ARCoreSession {
     }
 
 
+    /**
+     * Detect a single RFID tag (convenience method)
+     * This method wraps the multiple tags detection for single tag use
+     * @param tagId Single tag ID to detect
+     */
+    public void detectRFIDTag(String tagId) {
+        if (tagId == null || tagId.trim().isEmpty()) {
+            Log.w(LOG_TAG, "detectRFIDTag: Invalid tag ID provided");
+            return;
+        }
+        
+        // Use the multiple tags method with a single tag
+        String[] singleTagArray = {tagId};
+        detectMultipleRFIDTags(singleTagArray);
+        
+        Log.i(LOG_TAG, "detectRFIDTag: Single tag detected: " + tagId);
+    }
+
+    /**
+     * Detect multiple RFID tags simultaneously with the same timestamp and pose
+     * This is more efficient for simultaneous detections as it uses the same frame data
+     * @param tagIds Array of tag IDs detected simultaneously
+     */
+    public void detectMultipleRFIDTags(String[] tagIds) {
+        if (!mIsRecording.get() || !mIsWritingFile.get()) {
+            Log.w(LOG_TAG, "detectMultipleRFIDTags: Not recording, ignoring tag detections");
+            return;
+        }
+
+        if (mArFragment == null) {
+            Log.w(LOG_TAG, "detectMultipleRFIDTags: ArFragment not initialized");
+            return;
+        }
+
+        if (tagIds == null || tagIds.length == 0) {
+            Log.w(LOG_TAG, "detectMultipleRFIDTags: No tag IDs provided");
+            return;
+        }
+
+        try {
+            Frame frame = mArFragment.getArSceneView().getArFrame();
+            if (frame == null) {
+                Log.w(LOG_TAG, "detectMultipleRFIDTags: No current frame available");
+                return;
+            }
+
+            // Get current pose data (same for all simultaneous detections)
+            long timestamp = frame.getTimestamp();
+            Camera camera = frame.getCamera();
+            Pose cameraPose = camera.getPose();
+            
+            // Extract quaternion and translation from camera pose
+            float[] quaternion = cameraPose.getRotationQuaternion();
+            float[] translation = cameraPose.getTranslation();
+
+            // Record pose with all tag IDs in a single line
+            mFileStreamer.addARCorePoseWithMultipleTagsRecord(timestamp, 
+                quaternion[0], quaternion[1], quaternion[2], quaternion[3],
+                translation[0], translation[1], translation[2], tagIds);
+            
+            Log.i(LOG_TAG, "detectMultipleRFIDTags: Recorded " + tagIds.length + 
+                  " tags simultaneously at pose (" + translation[0] + ", " + 
+                  translation[1] + ", " + translation[2] + ")");
+
+        } catch (IOException | KeyException e) {
+            Log.e(LOG_TAG, "detectMultipleRFIDTags: Error recording tag detections", e);
+        }
+    }
+
+
     // definition of 'ARCoreResultStreamer' class
     class ARCoreResultStreamer extends FileStreamer {
 
@@ -430,20 +463,27 @@ public class ARCoreSession {
             }
         }
 
-        public void addARCorePoseWithTagRecord(long timestamp, float qx, float qy, float qz, float qw, float tx, float ty, float tz, String tagId) throws IOException, KeyException {
+
+        public void addARCorePoseWithMultipleTagsRecord(long timestamp, float qx, float qy, float qz, float qw, float tx, float ty, float tz, String[] tagIds) throws IOException, KeyException {
 
             // execute the block with only one thread
             synchronized (this) {
 
-                // record timestamp, 6-DoF device pose, and tag ID in text file
+                // record timestamp, 6-DoF device pose, and all tag IDs in a single line
                 StringBuilder stringBuilder = new StringBuilder();
                 stringBuilder.append(timestamp);
                 stringBuilder.append(String.format(Locale.US, " %.6f %.6f %.6f %.6f %.6f %.6f %.6f", qx, qy, qz, qw, tx, ty, tz));
-                stringBuilder.append(" " + tagId);
+                
+                // Add all tag IDs to the same line
+                for (String tagId : tagIds) {
+                    stringBuilder.append(" " + tagId);
+                }
+                
                 stringBuilder.append(" \n");
                 mWriterPose.write(stringBuilder.toString());
             }
         }
+
 
         public void addARCorePointRecord(final float pointX, final float pointY, final float pointZ, final float r, final float g, final float b) throws IOException, KeyException {
 

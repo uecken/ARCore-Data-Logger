@@ -135,8 +135,14 @@ def create_sample_data():
             line = f"{int(timestamps[i])} {quaternions[i,0]:.6f} {quaternions[i,1]:.6f} {quaternions[i,2]:.6f} {quaternions[i,3]:.6f} {x[i]:.6f} {y[i]:.6f} {z[i]:.6f}"
             
             # Add tag detection at certain positions
-            if i in [20, 40, 60, 80]:  # 4 detections from different positions
+            if i == 20:  # Single tag detection
                 line += " TAG001"
+            elif i == 40:  # Multiple tags detected simultaneously (new format)
+                line += " TAG001 TAG002"
+            elif i == 60:  # Another single tag
+                line += " TAG002"
+            elif i == 80:  # Three tags detected simultaneously (new format)
+                line += " TAG001 TAG002 TAG003"
             
             f.write(line + "\n")
     

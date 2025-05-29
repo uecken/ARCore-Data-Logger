@@ -61,7 +61,9 @@ public class MainActivity extends AppCompatActivity {
     private TextView mLabelTrackingStatus, mLabelTrackingFailureReason;
 
     private Button mStartStopButton;
-    private Button mDetectTagButton;
+    private Button mDetectTag1Button;
+    private Button mDetectTag2Button;
+    private Button mDetectBothButton;
     private TextView mLabelInterfaceTime;
     private Timer mInterfaceTimer = new Timer();
     private int mSecondCounter = 0;
@@ -264,7 +266,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void detectRFIDTag(View view) {
+    public void detectRFIDTag1(View view) {
         // Check if recording is active
         if (!mIsRecording.get()) {
             showToast("Please start recording first");
@@ -277,9 +279,46 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         
-        // Trigger RFID tag detection
+        // Detect TAG1 only
         mARCoreSession.detectRFIDTag("TAG001");
-        showToast("RFID Tag detected!");
+        showToast("RFID Tag detected: TAG001");
+    }
+
+    public void detectRFIDTag2(View view) {
+        // Check if recording is active
+        if (!mIsRecording.get()) {
+            showToast("Please start recording first");
+            return;
+        }
+        
+        // Check if ARCore session is available
+        if (mARCoreSession == null) {
+            showToast("ARCore session is not available");
+            return;
+        }
+        
+        // Detect TAG2 only
+        mARCoreSession.detectRFIDTag("TAG002");
+        showToast("RFID Tag detected: TAG002");
+    }
+
+    public void detectRFIDTagBoth(View view) {
+        // Check if recording is active
+        if (!mIsRecording.get()) {
+            showToast("Please start recording first");
+            return;
+        }
+        
+        // Check if ARCore session is available
+        if (mARCoreSession == null) {
+            showToast("ARCore session is not available");
+            return;
+        }
+        
+        // Detect both tags simultaneously
+        String[] bothTags = {"TAG001", "TAG002"};
+        mARCoreSession.detectMultipleRFIDTags(bothTags);
+        showToast("Multiple RFID Tags detected: TAG001, TAG002");
     }
 
     private void startRecording() {
@@ -354,7 +393,9 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 mStartStopButton.setEnabled(true);
                 mStartStopButton.setText(R.string.stop_title);
-                mDetectTagButton.setEnabled(true);
+                mDetectTag1Button.setEnabled(true);
+                mDetectTag2Button.setEnabled(true);
+                mDetectBothButton.setEnabled(true);
             }
         });
         showToast("Recording starts with fresh VIO!");
@@ -471,7 +512,9 @@ public class MainActivity extends AppCompatActivity {
 
                 mStartStopButton.setEnabled(true);
                 mStartStopButton.setText(R.string.start_title);
-                mDetectTagButton.setEnabled(false);
+                mDetectTag1Button.setEnabled(false);
+                mDetectTag2Button.setEnabled(false);
+                mDetectBothButton.setEnabled(false);
             }
         });
     }
@@ -576,7 +619,9 @@ public class MainActivity extends AppCompatActivity {
         mLabelUpdateRate = (TextView) findViewById(R.id.label_update_rate);
 
         mStartStopButton = (Button) findViewById(R.id.button_start_stop);
-        mDetectTagButton = (Button) findViewById(R.id.button_detect_tag);
+        mDetectTag1Button = (Button) findViewById(R.id.button_detect_tag1);
+        mDetectTag2Button = (Button) findViewById(R.id.button_detect_tag2);
+        mDetectBothButton = (Button) findViewById(R.id.button_detect_both);
         mLabelInterfaceTime = (TextView) findViewById(R.id.label_interface_time);
     }
 
@@ -652,7 +697,9 @@ public class MainActivity extends AppCompatActivity {
                 // Disable the start/stop button
                 mStartStopButton.setEnabled(false);
                 mStartStopButton.setText("ARCore Required");
-                mDetectTagButton.setEnabled(false);
+                mDetectTag1Button.setEnabled(false);
+                mDetectTag2Button.setEnabled(false);
+                mDetectBothButton.setEnabled(false);
             }
         });
     }
@@ -663,7 +710,9 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 mStartStopButton.setEnabled(true);
                 mStartStopButton.setText(R.string.start_title);
-                mDetectTagButton.setEnabled(true);
+                mDetectTag1Button.setEnabled(true);
+                mDetectTag2Button.setEnabled(true);
+                mDetectBothButton.setEnabled(true);
             }
         });
     }

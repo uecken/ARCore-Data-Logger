@@ -1,0 +1,3 @@
+adb shell "find /sdcard/Android/data/com.pjinkim.arcore_data_logger/files -name '*R_pjinkim_ARCore' -type d | head -1"
+
+adb pull "/sdcard/Android/data/com.pjinkim.arcore_data_logger/files/ARCore_Logs/20250529155226R_pjinkim_ARCore" "downloaded_logs/ARCore_Logs/"
